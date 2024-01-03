@@ -6,7 +6,7 @@ import {
 import { ConcertEntity } from './entities/concert.entity';
 import { CreateConcertDto } from './dto/create-concert.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import { UsersService } from 'src/users/users.service';
 
 @Injectable()
@@ -35,12 +35,19 @@ export class ConcertsService {
   }
 
   getAllConcert(): Promise<ConcertEntity[]> {
-    return this.concertsRepository.find({});
+    return this.concertsRepository.find({
+      where: { time: MoreThan(new Date()) },
+    });
+    // SELECT * FROM concert Where concert.time > (new Date() => 현재 시간);
   }
 
-  updateConcertSeat(concertId: number, concertSeats: number) {
+  updateConcertSeat(
+    concertId: number,
+    concertSeats: number,
+    seatCount: number,
+  ) {
     return this.concertsRepository.update(concertId, {
-      seats: concertSeats - 1,
+      seats: concertSeats - seatCount,
     });
   }
 
@@ -53,5 +60,17 @@ export class ConcertsService {
       throw new UnauthorizedException('관리자 권한이 없습니다.');
     }
     return this.concertsRepository.save(concertData);
+  }
+
+  async searchConcert(keyword: string) {
+    const resultConcert = await this.concertsRepository
+      .createQueryBuilder('concert')
+      .where('concert.name LIKE :keyword', { keyword: `%${keyword}%` })
+      .getMany();
+
+    if (!resultConcert) {
+      throw new BadRequestException('검색결과가 존재하지 않습니다.');
+    }
+    return resultConcert;
   }
 }

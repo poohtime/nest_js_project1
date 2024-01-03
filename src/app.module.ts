@@ -27,6 +27,7 @@ import { PassportModule } from '@nestjs/passport';
       database: 'nestjs_concert',
       entities: [UserEntity, ConcertEntity, BookEntity],
       synchronize: true,
+      logging: true,
     }),
     PassportModule,
     AuthModule,

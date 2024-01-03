@@ -15,10 +15,11 @@ export class BooksService {
     private readonly usersService: UsersService,
     private readonly concertService: ConcertsService,
   ) {}
-
+  //예약삭제하기
   deleteBook(bookId: number) {
     return this.booksRepository.delete(bookId);
   }
+
   // Type Promise<DeleteResult> is not assignable to type Promise<BookEntity>
   // Type Promise<DeleteResult> === Promise<BookEntity> ?
 
@@ -53,33 +54,84 @@ export class BooksService {
     concertId: number,
     createData: CreateBookDto,
   ) {
+    const books: BookEntity[] = [];
     const user = await this.usersService.getUserById(userId);
     if (!user) {
       throw new BadRequestException('예약할수있는 권한이 없습니다.');
     }
     const concert = await this.concertService.getOneConcert(concertId);
+    if (new Date() > concert.time) {
+      throw new BadRequestException('예매할수있는 시간이 지났습니다.');
+    }
 
-    // 1. 사용자 포인트 계산
-    await this.usersService.updateUserPoint(user.id, user.point, concert.price);
+    createData.seat.map(async (seat) => {
+      const book = await this.getOneBookBySeat(seat); // 예매 내역이 있는 지 확인
+      if (book) {
+        throw new BadRequestException('이미 예약한 내역이 존재합니다.');
+      }
 
-    // 2. 예매 가능 좌석수 줄이기
-    this.getOneBook(createData.seat);
+      books.push(
+        this.booksRepository.create({
+          user: { id: userId },
+          concert: { id: concertId },
+          seat: seat,
+        }),
+      );
+    });
 
-    this.concertService.updateConcertSeat(concert.id, concert.seats);
+    // 사용자 포인트 계산
+    await this.usersService.updateUserPoint(
+      user.id,
+      user.point,
+      concert.price * createData.seat.length,
+    );
+    await this.concertService.updateConcertSeat(
+      concert.id,
+      concert.seats,
+      createData.seat.length,
+    );
 
     // 3. 예매 내역 저장
-    return this.booksRepository.save({
-      user: { id: userId },
-      concert: { id: concertId },
-      seat: createData.seat,
-    });
+    await this.booksRepository.save(books);
   }
 
   getAllBook(userId: number): Promise<BookEntity[]> {
-    return this.booksRepository.find({ where: { id: userId } });
+    return this.booksRepository
+      .createQueryBuilder('book')
+      .select('book.id', 'id')
+      .addSelect('user.id', 'userId')
+      .addSelect('concert.id', 'concertId')
+      .addSelect('book.seat', 'seat')
+      .innerJoin('book.user', 'user')
+      .innerJoin('book.concert', 'concert')
+      .where('user.id = :id', {
+        id: userId,
+      })
+      .getRawMany();
+    /*
+       * AS: alias, 별명
+       SELECT `book`.`id` AS `id`, `book`.`seat` AS `seat`, `user`.`id` AS `userId`, `concert`.`id` AS `concertId`
+       FROM `book` `book` => this.booksRepository
+       INNER JOIN `user` `user` ON `user`.`id`=`book`.`user_id`
+       INNER JOIN `concert` `concert` ON `concert`.`id`=`book`.`concert_id`
+       WHERE `user`.`id` = (:id)
+    */
   }
 
-  getOneBook(bookId: number): Promise<BookEntity> {
-    return this.booksRepository.findOne({ where: { id: bookId } });
+  async getOneBook(userId: number, bookId: number): Promise<BookEntity> {
+    const book = await this.booksRepository.findOne({
+      where: { id: bookId },
+    });
+
+    // 다른 사람이 예매한 경우 에러 메시지
+    if (book.user.id !== userId) {
+      throw new BadRequestException('본인이 예매한 예약번호가 아닙니다!');
+    }
+
+    return book;
+  }
+
+  private async getOneBookBySeat(seat: number) {
+    return this.booksRepository.findOne({ where: { seat: seat } });
   }
 }

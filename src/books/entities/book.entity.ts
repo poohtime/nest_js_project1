@@ -26,9 +26,6 @@ export class BookEntity {
   concert: ConcertEntity;
 
   @Column()
-  concert_id: number;
-
-  @Column()
   seat: number;
 
   @CreateDateColumn({ type: 'timestamp' })

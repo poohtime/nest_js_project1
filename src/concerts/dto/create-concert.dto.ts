@@ -14,7 +14,7 @@ export class CreateConcertDto {
   readonly place: string;
 
   @IsNumber()
-  readonly seat: number;
+  readonly seats: number;
 
   @IsDateString()
   readonly time: Date;

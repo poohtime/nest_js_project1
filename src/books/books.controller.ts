@@ -7,12 +7,15 @@ import {
   Body,
   Delete,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { BooksService } from './books.service';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { BookEntity } from './entities/book.entity';
 import { CreateBookDto } from './dto/create-book.dto';
+import { JwtAuthGuard } from '../auth/guard/jwtAuth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('books')
 export class BooksController {
   constructor(private readonly booksService: BooksService) {}
@@ -24,17 +27,22 @@ export class BooksController {
   }
 
   @Get('list/:bookId')
-  getOneBook(@Req() req: any) {
-    return this.booksService.getOneBook(req.books.id);
+  getOneBook(@Param('bookId') bookId: number, @Req() req: any) {
+    return this.booksService.getOneBook(bookId, req.user.id);
   }
 
   @Post(':concertId')
-  createBook(
+  async createBook(
     @Param('concertId') concertId: number,
     @Req() req: any,
     @Body() createData: CreateBookDto,
   ) {
-    return this.booksService.createBook(req.user.id, concertId, createData);
+    await this.booksService.createBook(req.user.id, concertId, createData);
+    return {
+      userId: req.user.id,
+      concertId: concertId,
+      seat: createData.seat,
+    };
   }
 
   /* Patch /books/:concertId
@@ -48,8 +56,8 @@ export class BooksController {
     return this.booksService.updateBook(req.user.id, concertId, updateData);
   }
 
-  @Delete('delete')
-  deleteBook(@Req() req: any) {
-    return this.booksService.deleteBook(req.books.id);
+  @Delete(':bookId')
+  deleteBook(@Param('bookId') bookId: number) {
+    return this.booksService.deleteBook(bookId);
   }
 }
